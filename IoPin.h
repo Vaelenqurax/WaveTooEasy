@@ -57,7 +57,7 @@ class IoPin
 
 public:
 	IoPin(uint8_t num, char* file, PinPolarity polarity, PinTriggerType trigger,
-			  PlayMode playback, float volume, DeassertMode deassert, uint32_t debounce);
+			  PlayMode playback, float volume, DeassertMode deassert, uint32_t debounce, uint32_t max_random = 0);
 	bool begin();
 	void end();
 	bool poll();
@@ -75,6 +75,7 @@ private:
 	PinTriggerType trigger_type;
 	PlayMode playback_mode;
 	float volume;
+	uint32_t max_random_index;
 
 	// Debouncing
 	TimeCounter debouncer;
@@ -88,6 +89,7 @@ private:
 	}
 
 	void triggered();
+	void getPlayFilePath(char* out_buffer, size_t buffer_size);
 	void processEdgeAsserted();
 	void processLevelAsserted();
 	void processLevelDeasserted();

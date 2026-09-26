@@ -201,7 +201,12 @@ bool initializeIoMode()
 		sprintf(io_name, "pin%i_debounce", i + 1);
 		config.readValue("io", io_name, &debounce);
 
-		io_pins[i] = new IoPin(i, tmp, polarity, trigger, playback, volume, deassert, debounce);
+		// Read random settings
+		uint32_t max_random = 0;
+		sprintf(io_name, "pin%i_random", i + 1);
+		config.readValue("io", io_name, &max_random);
+
+		io_pins[i] = new IoPin(i, tmp, polarity, trigger, playback, volume, deassert, debounce, max_random);
 
 		if (!io_pins[i])
 		{

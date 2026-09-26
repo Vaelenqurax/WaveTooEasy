@@ -27,11 +27,12 @@
 extern PlayersPool players;
 
 IoPin::IoPin(uint8_t num, char* file, PinPolarity polarity, PinTriggerType trigger,
-		  PlayMode playback, float volume, DeassertMode deassert, uint32_t debounce) :
+		  PlayMode playback, float volume, DeassertMode deassert, uint32_t debounce, uint32_t max_random) :
 
 	      player(NULL), pin_num(num), enabled(false), state(PinDeasserted),
 		  last_state(PinDeasserted), error(false), deassert_mode(deassert),
 		  io_polarity(polarity), trigger_type(trigger), playback_mode(playback), volume(volume),
+		  max_random_index(max_random),
 		  debounce(debounce), debouncer_state(PinDeasserted)
 {
 	if (file)
@@ -56,10 +57,10 @@ bool IoPin::begin()
 
 	enabled = true;
 
-	debugMsg(DebugInfo, "Pin %i enabled (%s, %s, %s)" ,
+	debugMsg(DebugInfo, "Pin %i enabled (%s, %s, %s, max_random=%u)" ,
 				 pin_num, io_polarity == PinActiveHigh ? "IoActiveHigh" : "IoActiveLow",
 						 trigger_type == LevelTrigger ? "LevelTrigger" : "EdgeTrigger",
-						 file_path);
+						 file_path, max_random_index);
 	return true;
 }
 
@@ -98,6 +99,29 @@ void IoPin::triggered()
 	}
 }
 
+void IoPin::getPlayFilePath(char* out_buffer, size_t buffer_size)
+{
+	if (max_random_index == 0)
+	{
+		snprintf(out_buffer, buffer_size, "%s", file_path);
+		return;
+	}
+
+	// Seed the random number generator if not already seeded
+	static bool rng_seeded = false;
+	if (!rng_seeded)
+	{
+		randomSeed(micros());
+		rng_seeded = true;
+	}
+
+	// Add the a random index to the file name, right before ".wav" so
+	// it becomes "filename.N.wav".
+	uint32_t rand_idx = random(1, max_random_index + 1);
+	int base_len = (int)strlen(file_path) - 4;
+	snprintf(out_buffer, buffer_size, "%.*s.%u%s", base_len, file_path, rand_idx, file_path + base_len);
+}
+
 inline void IoPin::processEdgeAsserted()
 {
 	if (!player)
@@ -111,6 +135,9 @@ inline void IoPin::processEdgeAsserted()
 		}
 	}
 
+	char target_file[256];
+	getPlayFilePath(target_file, sizeof(target_file));
+
 	switch (player->getStatus())
 	{
 		case playerPlaying:
@@ -122,14 +149,14 @@ inline void IoPin::processEdgeAsserted()
 					break;
 
 				case DeassertRestart:
-					if (!player->play(file_path, playback_mode))
+					if (!player->play(target_file, playback_mode))
 					{
-						debugMsg(DebugError, "Pin %i - error re-playing", pin_num);
+						debugMsg(DebugError, "Pin %i - error re-playing %s", pin_num, target_file);
 						players.release(player);
 						player = NULL;
 						error = true;
 					} else {
-						debugMsg(DebugInfo, "Pin %i re-playing", pin_num);
+						debugMsg(DebugInfo, "Pin %i re-playing %s", pin_num, target_file);
 					}
 					break;
 
@@ -148,14 +175,14 @@ inline void IoPin::processEdgeAsserted()
 			break;
 
 		case playerStopped:
-			if (!player->play(file_path, playback_mode))
+			if (!player->play(target_file, playback_mode))
 			{
-				debugMsg(DebugError, "Pin %i - error playing", pin_num);
+				debugMsg(DebugError, "Pin %i - error playing %s", pin_num, target_file);
 				players.release(player);
 				player = NULL;
 				error = true;
 			} else {
-				debugMsg(DebugInfo, "Pin %i playing", pin_num);
+				debugMsg(DebugInfo, "Pin %i playing %s", pin_num, target_file);
 			}
 			break;
 	}
@@ -186,14 +213,17 @@ inline void IoPin::processLevelAsserted()
 		return;
 	}
 
-	if (!player->play(file_path, playback_mode))
+	char target_file[256];
+	getPlayFilePath(target_file, sizeof(target_file));
+
+	if (!player->play(target_file, playback_mode))
 	{
-		debugMsg(DebugError, "Pin %i - error playing", pin_num);
+		debugMsg(DebugError, "Pin %i - error playing %s", pin_num, target_file);
         players.release(player);
 		player = NULL;
 		error = true;
 	} else {
-		debugMsg(DebugInfo, "Pin %i playing", pin_num);
+		debugMsg(DebugInfo, "Pin %i playing %s", pin_num, target_file);
 	}
 }
 
